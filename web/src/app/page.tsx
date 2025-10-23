@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Slider from "@/components/slider";
 import ControlPanel from "@/components/control-panel";
 import { FALLBACK_SLIDES } from "@/lib/notion";
@@ -9,6 +10,7 @@ import type { Slide } from "@/lib/notion";
 const DEFAULT_INTERVAL = 10;
 
 export default function Home() {
+  const searchParams = useSearchParams();
   const [autoPlayInterval, setAutoPlayInterval] = useState<number>(DEFAULT_INTERVAL);
   const [showControls, setShowControls] = useState<boolean>(false);
   const [visibleNeighbors, setVisibleNeighbors] = useState<number>(2);
@@ -24,8 +26,11 @@ export default function Home() {
         setIsLoading(true);
         setError(undefined);
 
-        const response = await fetch("/api/slides", {
+        const qs = searchParams.toString();
+        const url = qs ? `/api/slides?${qs}` : "/api/slides";
+        const response = await fetch(url, {
           signal: controller.signal,
+          cache: "no-store",
         });
 
         if (!response.ok) {
@@ -61,7 +66,7 @@ export default function Home() {
     return () => {
       controller.abort();
     };
-  }, [visibleNeighbors]);
+  }, [visibleNeighbors, searchParams]);
 
   return (
     <div className="relative flex min-h-screen flex-col justify-center bg-gradient-to-br from-slate-950 via-gray-900 to-slate-900 px-4 py-12 text-slate-50 sm:px-8">
