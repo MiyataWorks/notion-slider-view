@@ -120,7 +120,7 @@ export default function Home() {
     }
     if (neighborsParam) {
       const parsed = Number(neighborsParam);
-      if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 5) {
+      if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 100) {
         setVisibleNeighbors(parsed);
       }
     }
