@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { FALLBACK_SLIDES, fetchSlides } from "@/lib/notion";
+import { fetchSlides } from "@/lib/notion";
 
 const isNotionDebugEnabled = (): boolean => {
   const flag = process.env["DEBUG_NOTION"]?.toLowerCase();
@@ -47,8 +47,13 @@ export async function GET(request: Request) {
     | "equals"
     | undefined;
   const filterValue = searchParams.get("filterValue") ?? undefined;
+  // Comma-separated list of additional properties to include in response slides
+  const displayProperties = (searchParams.get("displayProperties") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s !== "");
 
-  const { slides, error } = await fetchSlides({
+  const { slides, error, propertiesMeta } = await fetchSlides({
     databaseId,
     titleProperty,
     descriptionProperty,
@@ -59,7 +64,8 @@ export async function GET(request: Request) {
     filterProperty,
     filterOperator,
     filterValue,
-  });
+    displayProperties: displayProperties.length > 0 ? displayProperties : undefined,
+  }, { includePropertiesMeta: true });
 
   if (isNotionDebugEnabled()) {
     console.log("[notion:debug] /api/slides response", {
@@ -69,18 +75,10 @@ export async function GET(request: Request) {
     });
   }
 
-  if (error) {
-    return NextResponse.json(
-      {
-        slides: slides.length > 0 ? slides : FALLBACK_SLIDES,
-        error,
-      },
-      { status: 200 },
-    );
-  }
-
   return NextResponse.json({
     slides,
+    error,
+    propertiesMeta,
   });
 }
 

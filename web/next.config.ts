@@ -46,6 +46,21 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async headers() {
+    // Allow embedding this app inside Notion pages
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value:
+              "frame-ancestors 'self' https://www.notion.so https://notion.so https://*.notion.so https://*.notion.site;",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
