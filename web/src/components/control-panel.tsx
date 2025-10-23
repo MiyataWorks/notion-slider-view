@@ -9,7 +9,7 @@ type ControlPanelProps = {
   databaseId?: string;
   onDatabaseIdChange?: (value: string) => void;
   imageProperty?: string;
-  onImagePropertyChange?: (value: string) => void;
+  onImagePropertyChange?: (value: string | undefined) => void;
   imagePropertyOptions?: string[];
   displayPropertyOptions?: string[];
   selectedDisplayProperties?: string[];
