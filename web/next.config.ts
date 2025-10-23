@@ -55,7 +55,8 @@ const nextConfig: NextConfig = {
           {
             key: "Content-Security-Policy",
             value:
-              "frame-ancestors 'self' https://www.notion.so https://notion.so https://*.notion.so https://*.notion.site;",
+              // Allow HTTPS ancestors generally (for desktop app wrappers) and Notion-specific hosts
+              "frame-ancestors 'self' https: https://www.notion.so https://notion.so https://*.notion.so https://*.notion.site;",
           },
         ],
       },
