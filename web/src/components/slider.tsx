@@ -17,8 +17,12 @@ type SliderProps = {
 
 const clampVisibleNeighbors = (value: number) => Math.max(0, Math.min(value, 100));
 
-const createIndices = (current: number, total: number, range: number) => {
-  const indices = [] as number[];
+const createIndices = (
+  current: number,
+  total: number,
+  range: number,
+): Array<{ index: number; offset: number }> => {
+  const items: Array<{ index: number; offset: number }> = [];
 
   for (let offset = -range; offset <= range; offset += 1) {
     let index = current + offset;
@@ -27,10 +31,10 @@ const createIndices = (current: number, total: number, range: number) => {
     } else if (index >= total) {
       index -= total;
     }
-    indices.push(index);
+    items.push({ index, offset });
   }
 
-  return indices;
+  return items;
 };
 
 const dotClass = (active: boolean) =>
@@ -76,6 +80,9 @@ export default function Slider({
   const [isFocused, setIsFocused] = useState<boolean>(false);
   const total = slides.length;
   const safeCurrent = total > 0 ? ((current % total) + total) % total : 0;
+  // 画面に出す近傍カード数はデータ数に合わせて上限を設ける
+  const maxRangeByTotal = Math.max(0, Math.floor((total - 1) / 2));
+  const effectiveRange = Math.min(range, maxRangeByTotal);
 
   const goTo = (index: number) => {
     if (total === 0) return;
@@ -92,17 +99,17 @@ export default function Slider({
     goNext,
   );
 
-  const visibleIndices = useMemo(() => {
-    if (total === 0) return [] as number[];
-    return createIndices(safeCurrent, total, range);
-  }, [safeCurrent, total, range]);
+  const visibleItems = useMemo(() => {
+    if (total === 0) return [] as Array<{ index: number; offset: number }>;
+    return createIndices(safeCurrent, total, effectiveRange);
+  }, [safeCurrent, total, effectiveRange]);
 
   const controlButtonClass = "inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white transition hover:bg-white/20";
 
   // Tweak layout to avoid overflow when many neighbors or tall cards
   // 縦・正方形の見え方を改善: 過度な縮小をやめ、ほぼ等倍にする
-  const baseScale = imageAspect === "portrait" ? 0.92 : imageAspect === "square" ? 0.96 : 1;
-  const step = Math.max(80, 120 - Math.max(0, range - 2) * 8); // shrink spacing as neighbors increase
+  const baseScale = imageAspect === "portrait" ? 0.98 : imageAspect === "square" ? 0.96 : 1;
+  const step = Math.max(80, 120 - Math.max(0, effectiveRange - 2) * 8); // shrink spacing as neighbors increase
 
   const containerMinHeightClass =
     imageAspect === "portrait"
@@ -139,9 +146,8 @@ export default function Slider({
         aria-roledescription="carousel"
         aria-label="Notion スライダー"
       >
-        {visibleIndices.map((index) => {
+        {visibleItems.map(({ index, offset }) => {
           const slide = slides[index];
-          const offset = index - safeCurrent;
           const isActive = index === safeCurrent;
           const depth = Math.abs(offset);
           const scale = (isActive ? 1 : 1 - depth * 0.08) * baseScale;
@@ -151,7 +157,7 @@ export default function Slider({
 
           return (
             <a
-              key={slide.id}
+              key={`${slide.id}-${index}`}
               href={slide.notionUrl}
               target="_blank"
               rel="noopener noreferrer"
@@ -164,7 +170,7 @@ export default function Slider({
               )}
               style={{
                 transform: `translateX(${translate}px) scale(${scale})`,
-                zIndex: 10 + (range - depth),
+                zIndex: 10 + (effectiveRange - depth),
                 filter: `blur(${blur}px)`,
                 opacity,
               }}
@@ -182,7 +188,7 @@ export default function Slider({
                     src={slide.coverUrl}
                     alt={slide.title}
                     fill
-                    className="object-cover"
+                    className={clsx(imageAspect === "portrait" ? "object-contain" : "object-cover")}
                     sizes="(max-width: 768px) 90vw, 700px"
                     unoptimized
                     priority={isActive}
@@ -273,7 +279,7 @@ export default function Slider({
           {slides.map((_, index) => (
             <button
               key={index}
-              className={dotClass(index === current)}
+              className={dotClass(index === safeCurrent)}
               onClick={() => goTo(index)}
               aria-label={`Go to slide ${index + 1}`}
             />
