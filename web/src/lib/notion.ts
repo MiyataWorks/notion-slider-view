@@ -116,32 +116,79 @@ export const fetchSlides = async (
   }
 
   try {
-    const response = await (notionClient as unknown as {
-      databases: {
-        query: (params: {
-          database_id: string;
-          page_size: number;
-          sorts?: Array<{
-            property: string;
-            direction: "ascending" | "descending";
-          }>;
-        }) => Promise<{ results: Array<{ object: string } & Record<string, unknown>> }>;
-      };
-    }).databases.query({
-      database_id: databaseId,
-      page_size: Math.min(query.pageSize ?? DEFAULT_PAGE_SIZE, DEFAULT_PAGE_SIZE),
-      sorts:
-        query.sortProperty && query.sortDirection
-          ? [
-              {
-                property: query.sortProperty,
-                direction: query.sortDirection,
-              },
-            ]
-          : undefined,
-    });
+    const pageSize = Math.min(
+      query.pageSize ?? DEFAULT_PAGE_SIZE,
+      DEFAULT_PAGE_SIZE,
+    );
 
-    const slides = response.results
+    const sortsParam =
+      query.sortProperty && query.sortDirection
+        ? [
+            {
+              property: query.sortProperty,
+              direction: query.sortDirection,
+            },
+          ]
+        : undefined;
+
+    const anyClient = notionClient as unknown as Record<string, unknown> & {
+      databases?: { query?: Function };
+      request?: (args: {
+        path: string;
+        method: "GET" | "POST" | "PATCH" | "DELETE";
+        body?: unknown;
+      }) => Promise<unknown>;
+    };
+
+    let response: any;
+
+    // 1) Prefer SDK wrapper if available (@notionhq/client v2)
+    if (
+      anyClient.databases &&
+      typeof anyClient.databases.query === "function"
+    ) {
+      response = await anyClient.databases.query({
+        database_id: databaseId,
+        page_size: pageSize,
+        sorts: sortsParam,
+      });
+    }
+    // 2) Use low-level request if on newer SDK versions
+    else if (typeof anyClient.request === "function") {
+      response = await anyClient.request({
+        path: `databases/${databaseId}/query`,
+        method: "POST",
+        body: {
+          page_size: pageSize,
+          sorts: sortsParam,
+        },
+      });
+    }
+    // 3) Final fallback: direct HTTPS call
+    else {
+      const res = await fetch(
+        `https://api.notion.com/v1/databases/${databaseId}/query`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${notionToken}`,
+            "Content-Type": "application/json",
+            "Notion-Version": "2022-06-28",
+          },
+          body: JSON.stringify({
+            page_size: pageSize,
+            sorts: sortsParam,
+          }),
+        },
+      );
+
+      if (!res.ok) {
+        throw new Error(`Notion API error (${res.status})`);
+      }
+      response = await res.json();
+    }
+
+    const slides = (response.results as Array<Record<string, unknown>>)
       .filter((page): page is PageObjectResponse => page.object === "page")
       .map((page) => {
         const title =
