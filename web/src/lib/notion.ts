@@ -352,12 +352,15 @@ export const fetchSlides = async (
       if (isNotionDebugEnabled()) {
         console.log("[notion:debug] Using Notion SDK low-level request()");
       }
-      // Use SDK low-level request without '/v1' prefix.
-      // The client prepends the base URL and Notion API version header automatically.
+      // IMPORTANT: When using client.request, the correct path is
+      // 'databases/query' and the database_id must be provided in the body.
+      // Some SDK versions will return "Invalid request URL" if you use
+      // 'databases/{id}/query'.
       response = await anyClient.request({
-        path: `databases/${databaseId}/query`,
+        path: "databases/query",
         method: "POST",
         body: {
+          database_id: databaseId,
           page_size: pageSize,
           sorts: sortsParam,
           filter: filterParam,
