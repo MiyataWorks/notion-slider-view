@@ -182,12 +182,11 @@ export const fetchSlides = async (
     }
     // 2) Use low-level request if on newer SDK versions
     else if (typeof anyClient.request === "function") {
-      // The generic request API expects the path 'databases/query' with database_id in body
+      // Use the REST path that includes the database_id in the URL
       response = await anyClient.request({
-        path: "databases/query",
+        path: `databases/${databaseId}/query`,
         method: "POST",
         body: {
-          database_id: databaseId,
           page_size: pageSize,
           sorts: sortsParam,
         },
