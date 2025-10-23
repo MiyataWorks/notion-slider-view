@@ -184,10 +184,10 @@ export const fetchSlides = async (
     }
     // 2) Use low-level request if on newer SDK versions
     else if (typeof anyClient.request === "function") {
-      // Some SDK versions require an absolute URL or a path starting with '/'.
-      // Use the canonical REST path including the API version prefix.
+      // Use SDK low-level request without '/v1' prefix.
+      // The client prepends the base URL and Notion API version header automatically.
       response = await anyClient.request({
-        path: `/v1/databases/${databaseId}/query`,
+        path: `databases/${databaseId}/query`,
         method: "POST",
         body: {
           page_size: pageSize,
