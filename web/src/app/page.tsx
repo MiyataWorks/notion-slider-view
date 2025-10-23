@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Slider from "@/components/slider";
 import ControlPanel from "@/components/control-panel";
-import { FALLBACK_SLIDES } from "@/lib/notion";
+// import { FALLBACK_SLIDES } from "@/lib/notion";
 import type { Slide } from "@/lib/notion";
 
 const DEFAULT_INTERVAL = 10;
@@ -15,9 +15,15 @@ export default function Home() {
   const [autoPlayInterval, setAutoPlayInterval] = useState<number>(DEFAULT_INTERVAL);
   const [showControls, setShowControls] = useState<boolean>(false);
   const [visibleNeighbors, setVisibleNeighbors] = useState<number>(2);
-  const [slides, setSlides] = useState<Slide[]>(() => FALLBACK_SLIDES);
+  const [slides, setSlides] = useState<Slide[]>(() => []);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | undefined>(undefined);
+  const [databaseId, setDatabaseId] = useState<string | undefined>(undefined);
+  const [imageProperty, setImageProperty] = useState<string | undefined>(undefined);
+  const [displayProperties, setDisplayProperties] = useState<string[]>([]);
+  const [imageAspect, setImageAspect] = useState<"landscape" | "portrait" | "square">("landscape");
+  const [imagePropertyOptions, setImagePropertyOptions] = useState<string[] | undefined>(undefined);
+  const [displayPropertyOptions, setDisplayPropertyOptions] = useState<string[] | undefined>(undefined);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -27,7 +33,13 @@ export default function Home() {
         setIsLoading(true);
         setError(undefined);
 
-        const qs = searchParams.toString();
+        const params = new URLSearchParams(searchParams);
+        if (databaseId) params.set("databaseId", databaseId);
+        if (imageProperty) params.set("imageProperty", imageProperty);
+        if (displayProperties.length > 0) {
+          params.set("displayProperties", displayProperties.join(","));
+        }
+        const qs = params.toString();
         const url = qs ? `/api/slides?${qs}` : "/api/slides";
         const response = await fetch(url, {
           signal: controller.signal,
@@ -41,17 +53,25 @@ export default function Home() {
         const data = (await response.json()) as {
           slides: Slide[];
           error?: string;
+          propertiesMeta?: {
+            files: string[];
+            displayable: string[];
+          };
         };
 
-        setSlides(data.slides.length > 0 ? data.slides : FALLBACK_SLIDES);
+        setSlides(data.slides);
         setError(data.error);
+        if (data.propertiesMeta) {
+          setImagePropertyOptions(data.propertiesMeta.files);
+          setDisplayPropertyOptions(data.propertiesMeta.displayable);
+        }
       } catch (fetchError) {
         if (fetchError instanceof Error && fetchError.name === "AbortError") {
           return;
         }
 
         console.error(fetchError);
-        setSlides(FALLBACK_SLIDES);
+        setSlides([]);
         setError(
           fetchError instanceof Error
             ? fetchError.message
@@ -67,22 +87,31 @@ export default function Home() {
     return () => {
       controller.abort();
     };
-  }, [visibleNeighbors, searchParams]);
+  }, [visibleNeighbors, searchParams, databaseId, imageProperty, displayProperties]);
 
   // Sync settings with URL query (client-side only)
   useEffect(() => {
     const params = new URLSearchParams(searchParams);
     params.set("neighbors", String(visibleNeighbors));
     params.set("interval", String(autoPlayInterval));
+    if (databaseId && databaseId.trim() !== "") params.set("databaseId", databaseId);
+    else params.delete("databaseId");
+    if (imageProperty) params.set("imageProperty", imageProperty);
+    else params.delete("imageProperty");
+    if (displayProperties.length > 0) params.set("displayProperties", displayProperties.join(","));
+    else params.delete("displayProperties");
     // Replace state without scroll
     router.replace(`/?${params.toString()}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleNeighbors, autoPlayInterval]);
+  }, [visibleNeighbors, autoPlayInterval, databaseId, imageProperty, displayProperties]);
 
   useEffect(() => {
     // Initialize from URL on first render
     const intervalParam = searchParams.get("interval");
     const neighborsParam = searchParams.get("neighbors");
+    const dbParam = searchParams.get("databaseId");
+    const imgPropParam = searchParams.get("imageProperty");
+    const displayPropsParam = searchParams.get("displayProperties");
     if (intervalParam) {
       const parsed = Number(intervalParam);
       if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 60) {
@@ -95,6 +124,9 @@ export default function Home() {
         setVisibleNeighbors(parsed);
       }
     }
+    if (dbParam) setDatabaseId(dbParam);
+    if (imgPropParam) setImageProperty(imgPropParam);
+    if (displayPropsParam) setDisplayProperties(displayPropsParam.split(",").filter(Boolean));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -103,7 +135,7 @@ export default function Home() {
       <div className="mx-auto w-full max-w-6xl">
         <div className="flex items-center justify-between text-xs text-white/50">
           {isLoading ? (
-            <span>Notionからデータを読み込み中...</span>
+            <span>LOADING NOW...</span>
           ) : (
             <span>{slides.length} 件のページを表示中</span>
           )}
@@ -114,6 +146,7 @@ export default function Home() {
             slides={slides}
             autoPlayInterval={autoPlayInterval}
             visibleNeighbors={visibleNeighbors}
+            imageAspect={imageAspect}
             onToggleSettings={() => setShowControls((prev) => !prev)}
             isSettingsVisible={showControls}
           />
@@ -125,7 +158,16 @@ export default function Home() {
               visibleNeighbors={visibleNeighbors}
               onAutoPlayIntervalChange={setAutoPlayInterval}
               onVisibleNeighborsChange={setVisibleNeighbors}
-              // Future: hook to bind Notion query params as well
+              databaseId={databaseId}
+              onDatabaseIdChange={setDatabaseId}
+              imageProperty={imageProperty}
+              onImagePropertyChange={setImageProperty}
+              imagePropertyOptions={imagePropertyOptions}
+              displayPropertyOptions={displayPropertyOptions}
+              selectedDisplayProperties={displayProperties}
+              onSelectedDisplayPropertiesChange={setDisplayProperties}
+              imageAspect={imageAspect}
+              onImageAspectChange={setImageAspect}
             />
           </div>
         ) : null}

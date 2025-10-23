@@ -12,6 +12,7 @@ type SliderProps = {
   visibleNeighbors?: number;
   onToggleSettings?: () => void;
   isSettingsVisible?: boolean;
+  imageAspect?: "landscape" | "portrait" | "square";
 };
 
 const clampVisibleNeighbors = (value: number) => Math.max(0, Math.min(value, 5));
@@ -66,6 +67,7 @@ export default function Slider({
   visibleNeighbors = 2,
   onToggleSettings,
   isSettingsVisible,
+  imageAspect = "landscape",
 }: SliderProps) {
   const range = clampVisibleNeighbors(visibleNeighbors);
   const [current, setCurrent] = useState<number>(0);
@@ -142,15 +144,24 @@ export default function Slider({
                 "absolute flex w-full max-w-2xl flex-col rounded-3xl bg-black/60 text-white shadow-2xl transition will-change-transform",
                 "overflow-hidden border border-white/10 backdrop-blur",
                 "hover:border-white/30",
+                // Prevent center card from intercepting clicks on arrows
+                index === safeCurrent ? "pointer-events-auto" : "pointer-events-none",
               )}
               style={{
                 transform: `translateX(${translate}px) scale(${scale})`,
-                zIndex: range - depth,
+                zIndex: 10 + (range - depth),
                 filter: `blur(${blur}px)`,
                 opacity,
               }}
             >
-              <div className="relative h-72 w-full overflow-hidden">
+              <div
+                className={clsx(
+                  "relative w-full overflow-hidden",
+                  imageAspect === "landscape" && "h-72",
+                  imageAspect === "square" && "aspect-square",
+                  imageAspect === "portrait" && "aspect-[3/4]",
+                )}
+              >
                 {slide.coverUrl ? (
                   <Image
                     src={slide.coverUrl}
@@ -178,6 +189,16 @@ export default function Slider({
                     {slide.description}
                   </p>
                 )}
+                {slide.properties && (
+                  <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-white/70">
+                    {Object.entries(slide.properties).map(([key, value]) => (
+                      <div key={key} className="truncate" title={`${key}: ${value}`}>
+                        <span className="text-white/50">{key}: </span>
+                        <span>{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="mt-auto flex items-center justify-between text-xs text-white/60">
                   <span>詳細を見る</span>
                   <span>Notion ↗</span>
@@ -190,7 +211,7 @@ export default function Slider({
         <div className="pointer-events-none absolute inset-0 rounded-[30px] border border-white/10" />
 
         <button
-          className="group absolute left-0 top-1/2 -translate-y-1/2 translate-x-[-50%] rounded-full border border-white/10 bg-black/60 p-3 text-white shadow-lg transition hover:bg-white/20"
+          className="group absolute left-0 top-1/2 -translate-y-1/2 translate-x-[-50%] rounded-full border border-white/10 bg-black/60 p-3 text-white shadow-lg transition hover:bg-white/20 pointer-events-auto z-50"
           onClick={goPrev}
           aria-label="Previous slide"
         >
@@ -198,7 +219,7 @@ export default function Slider({
         </button>
 
         <button
-          className="group absolute right-0 top-1/2 -translate-y-1/2 translate-x-[50%] rounded-full border border-white/10 bg-black/60 p-3 text-white shadow-lg transition hover:bg-white/20"
+          className="group absolute right-0 top-1/2 -translate-y-1/2 translate-x-[50%] rounded-full border border-white/10 bg-black/60 p-3 text-white shadow-lg transition hover:bg-white/20 pointer-events-auto z-50"
           onClick={goNext}
           aria-label="Next slide"
         >
