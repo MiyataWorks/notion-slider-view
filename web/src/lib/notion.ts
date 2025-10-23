@@ -19,15 +19,6 @@ export type SlideQuery = {
   sortDirection?: "ascending" | "descending";
 };
 
-// Get first defined env value from candidate keys
-const getFirstEnv = (...keys: string[]): string | undefined => {
-  for (const key of keys) {
-    const value = process.env[key];
-    if (value && value.trim() !== "") return value;
-  }
-  return undefined;
-};
-
 // Convert various inputs (URL, hyphen-less ID, slugged URL) to hyphenated UUID
 const normalizeDatabaseId = (input?: string): string | undefined => {
   if (!input) return undefined;
@@ -50,13 +41,8 @@ const normalizeDatabaseId = (input?: string): string | undefined => {
 export const defaultSlideQuery: SlideQuery = {
   // Normalize env value to hyphenated UUID if provided
   databaseId: (() => {
-    const raw = getFirstEnv(
-      "NOTION_DATABASE_ID",
-      "NOTION_DB_ID",
-      "NOTION_DATABASE",
-      "NOTION_DEFAULT_DATABASE_ID",
-    );
-    if (!raw) return undefined;
+    const raw = process.env["NOTION_DATABASE_ID"];
+    if (!raw || raw.trim() === "") return undefined;
     const normalized = normalizeDatabaseId(raw);
     return normalized ?? undefined;
   })(),
@@ -68,13 +54,9 @@ export const defaultSlideQuery: SlideQuery = {
   sortDirection: undefined,
 };
 
-const notionToken = getFirstEnv(
-  "NOTION_TOKEN",
-  "NOTION_API_TOKEN",
-  "NOTION_SECRET",
-  "NOTION_INTERNAL_TOKEN",
-  "NOTION_INTEGRATION_TOKEN",
-);
+const notionTokenEnv = process.env["NOTION_TOKEN"];
+const notionToken =
+  notionTokenEnv && notionTokenEnv.trim() !== "" ? notionTokenEnv : undefined;
 
 let notionClient: Client | null = null;
 
@@ -152,13 +134,7 @@ export const fetchSlides = async (
   }
 
   const databaseId = normalizeDatabaseId(
-    query.databaseId ??
-      getFirstEnv(
-        "NOTION_DATABASE_ID",
-        "NOTION_DB_ID",
-        "NOTION_DATABASE",
-        "NOTION_DEFAULT_DATABASE_ID",
-      ),
+    query.databaseId ?? process.env["NOTION_DATABASE_ID"],
   );
 
   if (!databaseId) {
