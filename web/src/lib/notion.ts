@@ -20,7 +20,13 @@ export type SlideQuery = {
 };
 
 export const defaultSlideQuery: SlideQuery = {
-  databaseId: process.env.NOTION_DATABASE_ID,
+  // Normalize env value to hyphenated UUID if provided
+  databaseId: (() => {
+    const raw = process.env.NOTION_DATABASE_ID;
+    if (!raw) return undefined;
+    const normalized = normalizeDatabaseId(raw);
+    return normalized ?? undefined;
+  })(),
   titleProperty: "タイトル",
   descriptionProperty: undefined,
   imageProperty: undefined,
@@ -41,6 +47,25 @@ const DEFAULT_PAGE_SIZE = 100;
 
 const createNotionUrl = (pageId: string) =>
   `https://www.notion.so/${pageId.replace(/-/g, "")}`;
+
+// Convert various inputs (URL, hyphen-less ID, slugged URL) to hyphenated UUID
+const normalizeDatabaseId = (input?: string): string | undefined => {
+  if (!input) return undefined;
+  const trimmed = input.trim();
+
+  // If it's already a hyphenated UUID, accept it
+  const hyphenatedMatch = trimmed.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+  if (hyphenatedMatch) return hyphenatedMatch[0].toLowerCase();
+
+  // Try to find a 32-char hex id (from Notion URLs without hyphens)
+  const compact = trimmed.replace(/-/g, "");
+  const compactMatch = compact.match(/[0-9a-fA-F]{32}/);
+  if (!compactMatch) return undefined;
+
+  const id32 = compactMatch[0].toLowerCase();
+  // Insert hyphens: 8-4-4-4-12
+  return `${id32.slice(0, 8)}-${id32.slice(8, 12)}-${id32.slice(12, 16)}-${id32.slice(16, 20)}-${id32.slice(20)}`;
+};
 
 const getPlainText = (page: PageObjectResponse, propertyName?: string) => {
   if (!propertyName) return undefined;
@@ -106,7 +131,9 @@ export const fetchSlides = async (
     };
   }
 
-  const databaseId = query.databaseId ?? process.env.NOTION_DATABASE_ID;
+  const databaseId = normalizeDatabaseId(
+    query.databaseId ?? process.env.NOTION_DATABASE_ID,
+  );
 
   if (!databaseId) {
     return {
@@ -155,10 +182,12 @@ export const fetchSlides = async (
     }
     // 2) Use low-level request if on newer SDK versions
     else if (typeof anyClient.request === "function") {
+      // The generic request API expects the path 'databases/query' with database_id in body
       response = await anyClient.request({
-        path: `databases/${databaseId}/query`,
+        path: "databases/query",
         method: "POST",
         body: {
+          database_id: databaseId,
           page_size: pageSize,
           sorts: sortsParam,
         },
