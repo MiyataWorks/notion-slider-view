@@ -5,6 +5,8 @@ type ControlPanelProps = {
   visibleNeighbors: number;
   onAutoPlayIntervalChange: (value: number) => void;
   onVisibleNeighborsChange: (value: number) => void;
+  imageProperty?: string;
+  onImagePropertyChange?: (value: string) => void;
 };
 
 const intervalOptions = [5, 10, 15, 20, 30];
@@ -18,6 +20,8 @@ export default function ControlPanel({
   visibleNeighbors,
   onAutoPlayIntervalChange,
   onVisibleNeighborsChange,
+  imageProperty,
+  onImagePropertyChange,
 }: ControlPanelProps) {
   return (
     <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-6 backdrop-blur">
@@ -81,6 +85,21 @@ export default function ControlPanel({
             <li>2. データベースをインテグレーションに共有</li>
             <li>3. `.env.local` に値を設定し、サーバーを再起動</li>
           </ul>
+        </div>
+
+        <div className="rounded-xl bg-white/5 p-4">
+          <p className={labelClass}>Image Property</p>
+          <div className="mt-3 flex items-center gap-3">
+            <input
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white placeholder-white/30"
+              placeholder="画像/カバー など (任意)"
+              value={imageProperty ?? ""}
+              onChange={(event) => onImagePropertyChange?.(event.target.value)}
+            />
+          </div>
+          <p className="mt-2 text-xs text-white/50">
+            画像を格納しているファイル型プロパティ名を指定します。未指定時はページのカバー画像を使用します。
+          </p>
         </div>
 
         <div className="rounded-xl bg-white/5 p-4">
