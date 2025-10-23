@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { FALLBACK_SLIDES, fetchSlides } from "@/lib/notion";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic"; // Ensure serverless function runs on every request
+export const revalidate = 0; // Disable ISR for this API route
 
 const parseNumber = (value: string | null) => {
   if (!value) return undefined;
