@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { FALLBACK_SLIDES, fetchSlides } from "@/lib/notion";
 
+export const runtime = "nodejs";
+
 const parseNumber = (value: string | null) => {
   if (!value) return undefined;
   const parsed = Number(value);
