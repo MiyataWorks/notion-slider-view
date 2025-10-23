@@ -59,12 +59,6 @@ const nextConfig: NextConfig = {
               // Note: We rely on CSP (not XFO) for clickjacking protection in this app.
               "frame-ancestors 'self' https: https://www.notion.so https://notion.so https://*.notion.so https://*.notion.site;",
           },
-          {
-            // Some platforms inject X-Frame-Options: SAMEORIGIN by default, which blocks Notion embed.
-            // Set an invalid value so browsers ignore XFO entirely and rely on CSP above.
-            key: "X-Frame-Options",
-            value: "ALLOWALL",
-          },
         ],
       },
     ];
