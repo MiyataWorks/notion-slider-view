@@ -21,7 +21,7 @@ type ControlPanelProps = {
 
 const intervalOptions = [5, 10, 15, 20, 30];
 
-const neighborOptions = [0, 1, 2, 3, 4, 5];
+const neighborOptions = [0, 1, 2, 3, 4, 5, 10, 20, 50, 100];
 
 const labelClass = "text-xs font-medium uppercase tracking-[0.3em] text-white/50";
 

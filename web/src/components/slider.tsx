@@ -15,7 +15,7 @@ type SliderProps = {
   imageAspect?: "landscape" | "portrait" | "square";
 };
 
-const clampVisibleNeighbors = (value: number) => Math.max(0, Math.min(value, 5));
+const clampVisibleNeighbors = (value: number) => Math.max(0, Math.min(value, 100));
 
 const createIndices = (current: number, total: number, range: number) => {
   const indices = [] as number[];
@@ -100,13 +100,24 @@ export default function Slider({
   const controlButtonClass = "inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white transition hover:bg-white/20";
 
   // Tweak layout to avoid overflow when many neighbors or tall cards
-  const baseScale = imageAspect === "portrait" ? 0.72 : imageAspect === "square" ? 0.82 : 1;
+  // 縦・正方形の見え方を改善: 過度な縮小をやめ、ほぼ等倍にする
+  const baseScale = imageAspect === "portrait" ? 0.92 : imageAspect === "square" ? 0.96 : 1;
   const step = Math.max(80, 120 - Math.max(0, range - 2) * 8); // shrink spacing as neighbors increase
+
+  const containerMinHeightClass =
+    imageAspect === "portrait"
+      ? "min-h-[600px]"
+      : imageAspect === "square"
+        ? "min-h-[520px]"
+        : "min-h-[320px]";
 
   return (
     <div className="relative flex flex-col gap-8">
       <div
-        className="relative flex min-h-[320px] items-center justify-center overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded-[30px]"
+        className={clsx(
+          "relative flex items-center justify-center overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded-[30px]",
+          containerMinHeightClass,
+        )}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         tabIndex={0}
