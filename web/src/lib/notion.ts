@@ -330,81 +330,137 @@ export const fetchSlides = async (
       }) => Promise<unknown>;
     };
 
-    let response: unknown;
+    const isInvalidRequestUrlError = (err: unknown): boolean => {
+      // Notion sometimes returns { code: 'invalid_request_url' },
+      // and in other cases the SDK throws Error('Invalid request URL')
+      const code = (err as { code?: unknown } | undefined)?.code;
+      if (typeof code === "string" && code.toLowerCase() === "invalid_request_url") {
+        return true;
+      }
+      const message = err instanceof Error ? err.message : String(err ?? "");
+      return /invalid request url/i.test(message);
+    };
 
-    // 1) Prefer SDK wrapper if available (@notionhq/client v2)
-    if (
-      anyClient.databases &&
-      typeof anyClient.databases.query === "function"
-    ) {
-      if (isNotionDebugEnabled()) {
-        console.log("[notion:debug] Using Notion SDK databases.query()");
-      }
-      response = await anyClient.databases.query({
-        database_id: databaseId,
-        page_size: pageSize,
-        sorts: sortsParam,
-        filter: filterParam,
-      });
-    }
-    // 2) Use low-level request if on newer SDK versions
-    else if (typeof anyClient.request === "function") {
-      if (isNotionDebugEnabled()) {
-        console.log("[notion:debug] Using Notion SDK low-level request()");
-      }
-      // IMPORTANT: When using client.request, the correct path is
-      // 'databases/query' and the database_id must be provided in the body.
-      // Some SDK versions will return "Invalid request URL" if you use
-      // 'databases/{id}/query'.
-      response = await anyClient.request({
-        path: "databases/query",
-        method: "POST",
-        body: {
-          database_id: databaseId,
-          page_size: pageSize,
-          sorts: sortsParam,
-          filter: filterParam,
-        },
-      });
-    }
-    // 3) Final fallback: direct HTTPS call
-    else {
-      if (isNotionDebugEnabled()) {
-        console.log("[notion:debug] Using direct HTTPS fetch() to Notion API");
-      }
-      const res = await fetch(
-        `https://api.notion.com/v1/databases/${databaseId}/query`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${notionToken}`,
-            "Content-Type": "application/json",
-            "Notion-Version": "2022-06-28",
-          },
-          body: JSON.stringify({
+    let response: unknown | undefined;
+    let lastError: unknown;
+
+    const attempts: Array<{
+      name: string;
+      run: () => Promise<unknown>;
+    }> = [];
+
+    // 1) Prefer official SDK wrapper if available
+    if (anyClient.databases && typeof anyClient.databases.query === "function") {
+      attempts.push({
+        name: "sdk.databases.query",
+        run: () =>
+          anyClient.databases!.query!({
+            database_id: databaseId,
             page_size: pageSize,
             sorts: sortsParam,
             filter: filterParam,
           }),
-        },
-      );
+      });
+    }
 
-      if (!res.ok) {
-        let bodyText: string | undefined;
-        try {
-          bodyText = await res.text();
-        } catch {
-          // ignore
+    // 2) Low-level request() – try both URL shapes across SDK versions
+    if (typeof anyClient.request === "function") {
+      // a) Body carries database_id (older HTTP path)
+      attempts.push({
+        name: "sdk.request.databases/query",
+        run: () =>
+          anyClient.request!({
+            path: "databases/query",
+            method: "POST",
+            body: {
+              database_id: databaseId,
+              page_size: pageSize,
+              sorts: sortsParam,
+              filter: filterParam,
+            },
+          }),
+      });
+      // b) Path embeds database id (newer HTTP path)
+      attempts.push({
+        name: "sdk.request.databases/{id}/query",
+        run: () =>
+          anyClient.request!({
+            path: `databases/${databaseId}/query`,
+            method: "POST",
+            body: {
+              page_size: pageSize,
+              sorts: sortsParam,
+              filter: filterParam,
+            },
+          }),
+      });
+    }
+
+    // 3) Final fallback: raw HTTPS fetch
+    attempts.push({
+      name: "raw.fetch",
+      run: async () => {
+        const res = await fetch(
+          `https://api.notion.com/v1/databases/${databaseId}/query`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${notionToken}`,
+              "Content-Type": "application/json",
+              "Notion-Version": "2022-06-28",
+            },
+            body: JSON.stringify({
+              page_size: pageSize,
+              sorts: sortsParam,
+              filter: filterParam,
+            }),
+          },
+        );
+        if (!res.ok) {
+          let bodyText: string | undefined;
+          try {
+            bodyText = await res.text();
+          } catch {
+            // ignore
+          }
+          if (isNotionDebugEnabled()) {
+            console.error("[notion:debug] Notion API error response", {
+              status: res.status,
+              body: bodyText,
+            });
+          }
+          throw new Error(`Notion API error (${res.status})`);
         }
+        return res.json();
+      },
+    });
+
+    for (const attempt of attempts) {
+      try {
         if (isNotionDebugEnabled()) {
-          console.error("[notion:debug] Notion API error response", {
-            status: res.status,
-            body: bodyText,
+          console.log("[notion:debug] Notion request attempt", { attempt: attempt.name });
+        }
+        response = await attempt.run();
+        break; // success
+      } catch (err) {
+        lastError = err;
+        const invalidUrl = isInvalidRequestUrlError(err);
+        if (isNotionDebugEnabled()) {
+          console.warn("[notion:debug] Notion attempt failed", {
+            attempt: attempt.name,
+            error: err instanceof Error ? err.message : String(err),
+            willRetry: invalidUrl,
           });
         }
-        throw new Error(`Notion API error (${res.status})`);
+        // Retry next strategy only for Invalid URL mismatch. For other errors, abort.
+        if (!invalidUrl) {
+          throw err;
+        }
       }
-      response = await res.json();
+    }
+
+    if (!response) {
+      throw lastError ?? new Error("Notion API リクエストに失敗しました");
     }
 
     const isQueryResponse = (
