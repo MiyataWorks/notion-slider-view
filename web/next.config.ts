@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "images.unsplash.com",
       },
+      // Notion public images
       {
         protocol: "https",
         hostname: "www.notion.so",
@@ -15,9 +16,23 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "notion.so",
       },
+      // Notion file CDN (secure)
       {
         protocol: "https",
         hostname: "prod-files-secure.s3.us-west-2.amazonaws.com",
+      },
+      // Notion new asset domains (forward-compatible)
+      {
+        protocol: "https",
+        hostname: "s3.us-west-2.amazonaws.com",
+      },
+      {
+        protocol: "https",
+        hostname: "prod-notion.s3.us-west-2.amazonaws.com",
+      },
+      {
+        protocol: "https",
+        hostname: "secure.notion-static.com",
       },
     ],
   },

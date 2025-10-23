@@ -41,6 +41,12 @@ export async function GET(request: Request) {
   const pageSize = parseNumber(searchParams.get("pageSize"));
   const sortProperty = searchParams.get("sortProperty") ?? undefined;
   const sortDirection = parseSortDirection(searchParams.get("sortDirection"));
+  const filterProperty = searchParams.get("filterProperty") ?? undefined;
+  const filterOperator = (searchParams.get("filterOperator") ?? undefined) as
+    | "contains"
+    | "equals"
+    | undefined;
+  const filterValue = searchParams.get("filterValue") ?? undefined;
 
   const { slides, error } = await fetchSlides({
     databaseId,
@@ -50,6 +56,9 @@ export async function GET(request: Request) {
     pageSize,
     sortProperty,
     sortDirection,
+    filterProperty,
+    filterOperator,
+    filterValue,
   });
 
   if (isNotionDebugEnabled()) {

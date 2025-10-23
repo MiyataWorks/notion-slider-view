@@ -36,6 +36,9 @@ export type SlideQuery = {
   pageSize?: number;
   sortProperty?: string;
   sortDirection?: "ascending" | "descending";
+  filterProperty?: string;
+  filterOperator?: "contains" | "equals";
+  filterValue?: string;
 };
 
 // Convert various inputs (URL, hyphen-less ID, slugged URL) to hyphenated UUID
@@ -129,6 +132,30 @@ const getPlainText = (page: PageObjectResponse, propertyName?: string) => {
   }
 };
 
+type PageProperty = PageObjectResponse["properties"][string];
+const findTitlePropertyName = (page: PageObjectResponse): string | undefined => {
+  for (const [name, prop] of Object.entries(page.properties) as Array<[
+    string,
+    PageProperty,
+  ]>) {
+    if (prop && prop.type === "title") {
+      return name;
+    }
+  }
+  return undefined;
+};
+
+const getTitleText = (
+  page: PageObjectResponse,
+  explicitPropertyName?: string,
+): string => {
+  const fromExplicit = getPlainText(page, explicitPropertyName);
+  if (fromExplicit && fromExplicit.trim() !== "") return fromExplicit;
+  const detectedTitleName = findTitlePropertyName(page);
+  const fromDetected = getPlainText(page, detectedTitleName);
+  return fromDetected && fromDetected.trim() !== "" ? fromDetected : "Untitled";
+};
+
 const getImageUrl = (
   page: PageObjectResponse,
   imageProperty?: string,
@@ -212,8 +239,90 @@ export const fetchSlides = async (
           ]
         : undefined;
 
-    const anyClient = notionClient as unknown as Record<string, unknown> & {
-      databases?: { query?: Function };
+    // Optional filter support (limited operators)
+    let filterParam: Record<string, unknown> | undefined;
+    if (query.filterProperty && query.filterValue) {
+      // Try to infer property type by retrieving database schema
+      try {
+        const db = await (notionClient as Client).databases.retrieve({
+          database_id: databaseId,
+        });
+
+        type PropertySchema = { type: string };
+        const getPropertySchema = (
+          value: unknown,
+          propertyName: string,
+        ): PropertySchema | undefined => {
+          if (!value || typeof value !== "object") return undefined;
+          const properties = (value as Record<string, unknown>)["properties"];
+          if (!properties || typeof properties !== "object") return undefined;
+          const prop = (properties as Record<string, unknown>)[propertyName];
+          if (!prop || typeof prop !== "object") return undefined;
+          const t = (prop as Record<string, unknown>)["type"];
+          return typeof t === "string" ? { type: t } : undefined;
+        };
+
+        const schema = getPropertySchema(db, query.filterProperty);
+        const operator = query.filterOperator ?? "contains";
+        if (schema) {
+          switch (schema.type) {
+            case "select":
+              filterParam = {
+                property: query.filterProperty,
+                select: { equals: query.filterValue },
+              };
+              break;
+            case "multi_select":
+              filterParam = {
+                property: query.filterProperty,
+                multi_select: { contains: query.filterValue },
+              };
+              break;
+            case "title":
+            case "rich_text":
+              filterParam = {
+                property: query.filterProperty,
+                [schema.type]: { [operator]: query.filterValue },
+              };
+              break;
+            case "status":
+              filterParam = {
+                property: query.filterProperty,
+                status: { equals: query.filterValue },
+              };
+              break;
+            case "checkbox":
+              filterParam = {
+                property: query.filterProperty,
+                checkbox: { equals: query.filterValue === "true" },
+              };
+              break;
+            case "number":
+              {
+                const num = Number(query.filterValue);
+                if (Number.isFinite(num)) {
+                  filterParam = {
+                    property: query.filterProperty,
+                    number: { equals: num },
+                  };
+                }
+              }
+              break;
+            default:
+              // Fallback: attempt rich_text contains
+              filterParam = {
+                property: query.filterProperty,
+                rich_text: { contains: query.filterValue },
+              };
+          }
+        }
+      } catch {
+        // ignore filter if schema retrieval fails
+      }
+    }
+
+    const anyClient = notionClient as unknown as {
+      databases?: { query?: (args: unknown) => Promise<unknown> };
       request?: (args: {
         path: string;
         method: "GET" | "POST" | "PATCH" | "DELETE";
@@ -221,7 +330,7 @@ export const fetchSlides = async (
       }) => Promise<unknown>;
     };
 
-    let response: any;
+    let response: unknown;
 
     // 1) Prefer SDK wrapper if available (@notionhq/client v2)
     if (
@@ -235,6 +344,7 @@ export const fetchSlides = async (
         database_id: databaseId,
         page_size: pageSize,
         sorts: sortsParam,
+        filter: filterParam,
       });
     }
     // 2) Use low-level request if on newer SDK versions
@@ -250,6 +360,7 @@ export const fetchSlides = async (
         body: {
           page_size: pageSize,
           sorts: sortsParam,
+          filter: filterParam,
         },
       });
     }
@@ -270,6 +381,7 @@ export const fetchSlides = async (
           body: JSON.stringify({
             page_size: pageSize,
             sorts: sortsParam,
+            filter: filterParam,
           }),
         },
       );
@@ -278,7 +390,7 @@ export const fetchSlides = async (
         let bodyText: string | undefined;
         try {
           bodyText = await res.text();
-        } catch (_) {
+        } catch {
           // ignore
         }
         if (isNotionDebugEnabled()) {
@@ -292,11 +404,24 @@ export const fetchSlides = async (
       response = await res.json();
     }
 
-    const slides = (response.results as Array<Record<string, unknown>>)
+    const isQueryResponse = (
+      value: unknown,
+    ): value is { results: Array<Record<string, unknown>> } => {
+      return (
+        typeof value === "object" &&
+        value !== null &&
+        Array.isArray((value as Record<string, unknown>).results)
+      );
+    };
+
+    if (!isQueryResponse(response)) {
+      return { slides: [], error: "Notion API レスポンスが不正です" };
+    }
+
+    const slides = response.results
       .filter((page): page is PageObjectResponse => page.object === "page")
       .map((page) => {
-        const title =
-          getPlainText(page, query.titleProperty) ?? "Untitled";
+        const title = getTitleText(page, query.titleProperty);
         const description = getPlainText(page, query.descriptionProperty);
         const coverUrl = getImageUrl(page, query.imageProperty);
 

@@ -71,6 +71,7 @@ export default function Slider({
   const [current, setCurrent] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [isHovered, setIsHovered] = useState<boolean>(false);
+  const [isFocused, setIsFocused] = useState<boolean>(false);
   const total = slides.length;
   const safeCurrent = total > 0 ? ((current % total) + total) % total : 0;
 
@@ -83,7 +84,11 @@ export default function Slider({
   const goNext = () => goTo(safeCurrent + 1);
   const goPrev = () => goTo(safeCurrent - 1);
 
-  useAutoPlay(isPlaying && !isHovered && total > 1, autoPlayInterval, goNext);
+  useAutoPlay(
+    isPlaying && !isHovered && !isFocused && total > 1,
+    autoPlayInterval,
+    goNext,
+  );
 
   const visibleIndices = useMemo(() => {
     if (total === 0) return [] as number[];
@@ -95,9 +100,27 @@ export default function Slider({
   return (
     <div className="relative flex flex-col gap-8">
       <div
-        className="relative flex min-h-[320px] items-center justify-center"
+        className="relative flex min-h-[320px] items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded-[30px]"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
+        tabIndex={0}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowRight") {
+            event.preventDefault();
+            goNext();
+          } else if (event.key === "ArrowLeft") {
+            event.preventDefault();
+            goPrev();
+          } else if (event.key === " " || event.key === "Spacebar") {
+            // Toggle play/pause with Space
+            event.preventDefault();
+            setIsPlaying((prev) => !prev);
+          }
+        }}
+        aria-roledescription="carousel"
+        aria-label="Notion スライダー"
       >
         {visibleIndices.map((index) => {
           const slide = slides[index];

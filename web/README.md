@@ -53,4 +53,25 @@ npm run build
 - 前後に表示するカード枚数（0〜5 枚）
 - Notion API 設定ガイド（手順メモ）
 
+### URL パラメータ（埋め込み時の制御）
+
+以下のクエリを URL に付与して、Notion の `embed` から挙動を制御できます。
+
+- `databaseId`: 対象の Notion データベース ID（ハイフン有無どちらも可）
+- `titleProperty`: タイトルとして使用するプロパティ名（未指定時は自動検出）
+- `descriptionProperty`: 説明として使用するリッチテキストなどのプロパティ名
+- `imageProperty`: カバーが無い場合に使用する `files` プロパティ名
+- `pageSize`: 取得件数（最大 100）
+- `sortProperty`: ソート対象のプロパティ名
+- `sortDirection`: `ascending` | `descending`
+- `filterProperty`: フィルター対象のプロパティ名
+- `filterOperator`: `contains` | `equals`（テキスト系のみ）
+- `filterValue`: フィルター値
+- `interval`: 自動スライド秒数（1〜60）
+- `neighbors`: 前後に見せる枚数（0〜5）
+
+例: `https://your-app.example.com?databaseId=xxxx&sortProperty=作成日時&sortDirection=descending&interval=10&neighbors=2`
+
+注意: フィルターはプロパティの型に応じて自動で適用されます。対応外・判定不可の場合は無視されます。
+
 今後は Notion DB のプロパティ選択やソート／フィルター指定、キャッシュ最適化などを追加予定です。
