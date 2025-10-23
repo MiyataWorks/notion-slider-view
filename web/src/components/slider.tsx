@@ -113,10 +113,13 @@ export default function Slider({
 
   const containerMinHeightClass =
     imageAspect === "portrait"
-      ? "min-h-[600px]"
+      ? // 画像(3:4)に本文が続くため高めに確保。画面幅に応じて段階的に拡張
+        "min-h-[680px] sm:min-h-[820px] md:min-h-[980px] lg:min-h-[1120px]"
       : imageAspect === "square"
-        ? "min-h-[520px]"
-        : "min-h-[320px]";
+        ? // 正方形 + 本文で縦が不足しがちなので底上げ
+          "min-h-[600px] sm:min-h-[760px] md:min-h-[900px]"
+        : // 横長は従来どおりで十分
+          "min-h-[320px] sm:min-h-[420px] md:min-h-[560px]";
 
   return (
     <div className="relative flex flex-col gap-8">
@@ -188,7 +191,8 @@ export default function Slider({
                     src={slide.coverUrl}
                     alt={slide.title}
                     fill
-                    className={clsx(imageAspect === "portrait" ? "object-contain" : "object-cover")}
+                // 正方形・縦長は全体が見えることを優先
+                className={clsx(imageAspect !== "landscape" ? "object-contain" : "object-cover")}
                     sizes="(max-width: 768px) 90vw, 700px"
                     unoptimized
                     priority={isActive}
