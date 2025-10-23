@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Slider from "@/components/slider";
 import ControlPanel from "@/components/control-panel";
 import { FALLBACK_SLIDES } from "@/lib/notion";
@@ -11,6 +11,7 @@ const DEFAULT_INTERVAL = 10;
 
 export default function Home() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [autoPlayInterval, setAutoPlayInterval] = useState<number>(DEFAULT_INTERVAL);
   const [showControls, setShowControls] = useState<boolean>(false);
   const [visibleNeighbors, setVisibleNeighbors] = useState<number>(2);
@@ -68,6 +69,35 @@ export default function Home() {
     };
   }, [visibleNeighbors, searchParams]);
 
+  // Sync settings with URL query (client-side only)
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    params.set("neighbors", String(visibleNeighbors));
+    params.set("interval", String(autoPlayInterval));
+    // Replace state without scroll
+    router.replace(`/?${params.toString()}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleNeighbors, autoPlayInterval]);
+
+  useEffect(() => {
+    // Initialize from URL on first render
+    const intervalParam = searchParams.get("interval");
+    const neighborsParam = searchParams.get("neighbors");
+    if (intervalParam) {
+      const parsed = Number(intervalParam);
+      if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 60) {
+        setAutoPlayInterval(parsed);
+      }
+    }
+    if (neighborsParam) {
+      const parsed = Number(neighborsParam);
+      if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 5) {
+        setVisibleNeighbors(parsed);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="relative flex min-h-screen flex-col justify-center bg-gradient-to-br from-slate-950 via-gray-900 to-slate-900 px-4 py-12 text-slate-50 sm:px-8">
       <div className="mx-auto w-full max-w-6xl">
@@ -95,6 +125,7 @@ export default function Home() {
               visibleNeighbors={visibleNeighbors}
               onAutoPlayIntervalChange={setAutoPlayInterval}
               onVisibleNeighborsChange={setVisibleNeighbors}
+              // Future: hook to bind Notion query params as well
             />
           </div>
         ) : null}
