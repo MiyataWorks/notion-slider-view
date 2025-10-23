@@ -26,6 +26,8 @@ export type Slide = {
   description?: string;
   coverUrl: string | null;
   notionUrl: string;
+  // Optional additional key-value properties selected by the user to display
+  properties?: Record<string, string>;
 };
 
 export type SlideQuery = {
@@ -39,6 +41,19 @@ export type SlideQuery = {
   filterProperty?: string;
   filterOperator?: "contains" | "equals";
   filterValue?: string;
+  displayProperties?: string[];
+};
+
+export type DatabasePropertyMeta = {
+  name: string;
+  type: string;
+};
+
+export type DatabasePropertiesSummary = {
+  all: DatabasePropertyMeta[];
+  files: string[]; // candidates for image property
+  displayable: string[]; // candidates for displaying as text
+  titleName?: string;
 };
 
 // Convert various inputs (URL, hyphen-less ID, slugged URL) to hyphenated UUID
@@ -187,7 +202,8 @@ const getImageUrl = (
 
 export const fetchSlides = async (
   query: SlideQuery,
-): Promise<{ slides: Slide[]; error?: string }> => {
+  options?: { includePropertiesMeta?: boolean },
+): Promise<{ slides: Slide[]; error?: string; propertiesMeta?: DatabasePropertiesSummary }> => {
   if (!notionClient) {
     if (isNotionDebugEnabled()) {
       console.log("[notion:debug] Notion client is not initialized. Check NOTION_TOKEN.");
@@ -484,19 +500,67 @@ export const fetchSlides = async (
         const description = getPlainText(page, query.descriptionProperty);
         const coverUrl = getImageUrl(page, query.imageProperty);
 
+        let extra: Record<string, string> | undefined;
+        if (query.displayProperties && query.displayProperties.length > 0) {
+          extra = {};
+          for (const name of query.displayProperties) {
+            const value = getPlainText(page, name);
+            if (value != null && String(value).trim() !== "") {
+              extra[name] = String(value);
+            }
+          }
+        }
+
         return {
           id: page.id,
           title,
           description,
           coverUrl,
           notionUrl: createNotionUrl(page.id),
+          properties: extra,
         } satisfies Slide;
       });
+
+    let propertiesMeta: DatabasePropertiesSummary | undefined;
+    if (options?.includePropertiesMeta) {
+      try {
+        const db = await (notionClient as Client).databases.retrieve({
+          database_id: databaseId,
+        });
+        const all: DatabasePropertyMeta[] = [];
+        const files: string[] = [];
+        const displayable: string[] = [];
+        let titleName: string | undefined;
+
+        const props = (db as unknown as { properties?: Record<string, { type?: string }> }).properties ?? {};
+        for (const [name, def] of Object.entries(props)) {
+          const type = String((def as { type?: string }).type ?? "unknown");
+          all.push({ name, type });
+          if (type === "files") files.push(name);
+          if (
+            type === "title" ||
+            type === "rich_text" ||
+            type === "select" ||
+            type === "multi_select" ||
+            type === "status" ||
+            type === "url" ||
+            type === "number" ||
+            type === "date"
+          ) {
+            displayable.push(name);
+          }
+          if (type === "title") titleName = name;
+        }
+        propertiesMeta = { all, files, displayable, titleName };
+      } catch {
+        // ignore meta errors
+      }
+    }
 
     if (isNotionDebugEnabled()) {
       console.log("[notion:debug] Notion slides fetched", { count: slides.length });
     }
-    return { slides };
+    return { slides, propertiesMeta };
   } catch (error) {
     console.error("Failed to fetch Notion data", error);
     return {
