@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { FALLBACK_SLIDES, fetchSlides } from "@/lib/notion";
 
+const isNotionDebugEnabled = (): boolean => {
+  const flag = process.env["DEBUG_NOTION"]?.toLowerCase();
+  const enabledByFlag = flag === "1" || flag === "true" || flag === "on";
+  const enabledByEnv = process.env["NODE_ENV"] !== "production";
+  return enabledByFlag || enabledByEnv;
+};
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic"; // Ensure serverless function runs on every request
 export const revalidate = 0; // Disable ISR for this API route
@@ -44,6 +51,14 @@ export async function GET(request: Request) {
     sortProperty,
     sortDirection,
   });
+
+  if (isNotionDebugEnabled()) {
+    console.log("[notion:debug] /api/slides response", {
+      providedDatabaseId: Boolean(databaseId),
+      slidesCount: slides.length,
+      hasError: Boolean(error),
+    });
+  }
 
   if (error) {
     return NextResponse.json(

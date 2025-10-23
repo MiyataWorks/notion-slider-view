@@ -1,6 +1,25 @@
 import { Client } from "@notionhq/client";
 import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
 
+// Debug utilities (server-side only)
+const isNotionDebugEnabled = (): boolean => {
+  const flag = process.env["DEBUG_NOTION"]?.toLowerCase();
+  const enabledByFlag = flag === "1" || flag === "true" || flag === "on";
+  const enabledByEnv = process.env["NODE_ENV"] !== "production";
+  return enabledByFlag || enabledByEnv;
+};
+
+const maskSecret = (
+  value: string | undefined,
+  visibleStart: number = 6,
+  visibleEnd: number = 4,
+): string | undefined => {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (trimmed.length <= visibleStart + visibleEnd) return "*".repeat(trimmed.length);
+  return `${trimmed.slice(0, visibleStart)}...${trimmed.slice(-visibleEnd)}`;
+};
+
 export type Slide = {
   id: string;
   title: string;
@@ -44,6 +63,14 @@ export const defaultSlideQuery: SlideQuery = {
     const raw = process.env["NOTION_DATABASE_ID"];
     if (!raw || raw.trim() === "") return undefined;
     const normalized = normalizeDatabaseId(raw);
+    if (isNotionDebugEnabled()) {
+      const preview = maskSecret(normalized);
+      console.log("[notion:debug] NOTION_DATABASE_ID detected (normalized)", {
+        provided: true,
+        rawLength: raw.length,
+        normalizedPreview: preview,
+      });
+    }
     return normalized ?? undefined;
   })(),
   titleProperty: "タイトル",
@@ -62,6 +89,14 @@ let notionClient: Client | null = null;
 
 if (notionToken) {
   notionClient = new Client({ auth: notionToken });
+}
+
+if (isNotionDebugEnabled()) {
+  console.log("[notion:debug] NOTION_TOKEN presence", {
+    provided: Boolean(notionTokenEnv && notionTokenEnv.trim() !== ""),
+    length: notionTokenEnv?.trim().length ?? 0,
+    preview: maskSecret(notionTokenEnv),
+  });
 }
 
 const DEFAULT_PAGE_SIZE = 100;
@@ -127,6 +162,9 @@ export const fetchSlides = async (
   query: SlideQuery,
 ): Promise<{ slides: Slide[]; error?: string }> => {
   if (!notionClient) {
+    if (isNotionDebugEnabled()) {
+      console.log("[notion:debug] Notion client is not initialized. Check NOTION_TOKEN.");
+    }
     return {
       slides: [],
       error: "NOTION_TOKEN が設定されていません",
@@ -136,6 +174,20 @@ export const fetchSlides = async (
   const databaseId = normalizeDatabaseId(
     query.databaseId ?? process.env["NOTION_DATABASE_ID"],
   );
+
+  if (isNotionDebugEnabled()) {
+    console.log("[notion:debug] fetchSlides input", {
+      query: {
+        titleProperty: query.titleProperty,
+        descriptionProperty: query.descriptionProperty,
+        imageProperty: query.imageProperty,
+        pageSize: query.pageSize,
+        sortProperty: query.sortProperty,
+        sortDirection: query.sortDirection,
+      },
+      databaseIdPreview: maskSecret(databaseId),
+    });
+  }
 
   if (!databaseId) {
     return {
@@ -176,6 +228,9 @@ export const fetchSlides = async (
       anyClient.databases &&
       typeof anyClient.databases.query === "function"
     ) {
+      if (isNotionDebugEnabled()) {
+        console.log("[notion:debug] Using Notion SDK databases.query()");
+      }
       response = await anyClient.databases.query({
         database_id: databaseId,
         page_size: pageSize,
@@ -184,6 +239,9 @@ export const fetchSlides = async (
     }
     // 2) Use low-level request if on newer SDK versions
     else if (typeof anyClient.request === "function") {
+      if (isNotionDebugEnabled()) {
+        console.log("[notion:debug] Using Notion SDK low-level request()");
+      }
       // Use SDK low-level request without '/v1' prefix.
       // The client prepends the base URL and Notion API version header automatically.
       response = await anyClient.request({
@@ -197,6 +255,9 @@ export const fetchSlides = async (
     }
     // 3) Final fallback: direct HTTPS call
     else {
+      if (isNotionDebugEnabled()) {
+        console.log("[notion:debug] Using direct HTTPS fetch() to Notion API");
+      }
       const res = await fetch(
         `https://api.notion.com/v1/databases/${databaseId}/query`,
         {
@@ -214,6 +275,18 @@ export const fetchSlides = async (
       );
 
       if (!res.ok) {
+        let bodyText: string | undefined;
+        try {
+          bodyText = await res.text();
+        } catch (_) {
+          // ignore
+        }
+        if (isNotionDebugEnabled()) {
+          console.error("[notion:debug] Notion API error response", {
+            status: res.status,
+            body: bodyText,
+          });
+        }
         throw new Error(`Notion API error (${res.status})`);
       }
       response = await res.json();
@@ -236,6 +309,9 @@ export const fetchSlides = async (
         } satisfies Slide;
       });
 
+    if (isNotionDebugEnabled()) {
+      console.log("[notion:debug] Notion slides fetched", { count: slides.length });
+    }
     return { slides };
   } catch (error) {
     console.error("Failed to fetch Notion data", error);
