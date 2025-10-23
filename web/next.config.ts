@@ -16,6 +16,11 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "notion.so",
       },
+      // Notion image proxy
+      {
+        protocol: "https",
+        hostname: "image.notion.so",
+      },
       // Notion file CDN (secure)
       {
         protocol: "https",
@@ -25,6 +30,11 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "s3.us-west-2.amazonaws.com",
+      },
+      // Legacy dash-separated AWS hostname
+      {
+        protocol: "https",
+        hostname: "s3-us-west-2.amazonaws.com",
       },
       {
         protocol: "https",

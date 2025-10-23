@@ -158,6 +158,9 @@ export default function Slider({
                     fill
                     className="object-cover"
                     sizes="(max-width: 768px) 90vw, 700px"
+                    unoptimized
+                    priority={isActive}
+                    loading={isActive ? "eager" : "lazy"}
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900 text-sm text-white/60">
