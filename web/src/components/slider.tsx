@@ -99,10 +99,14 @@ export default function Slider({
 
   const controlButtonClass = "inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white transition hover:bg-white/20";
 
+  // Tweak layout to avoid overflow when many neighbors or tall cards
+  const baseScale = imageAspect === "portrait" ? 0.72 : imageAspect === "square" ? 0.82 : 1;
+  const step = Math.max(80, 120 - Math.max(0, range - 2) * 8); // shrink spacing as neighbors increase
+
   return (
     <div className="relative flex flex-col gap-8">
       <div
-        className="relative flex min-h-[320px] items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded-[30px]"
+        className="relative flex min-h-[320px] items-center justify-center overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded-[30px]"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         tabIndex={0}
@@ -129,8 +133,8 @@ export default function Slider({
           const offset = index - safeCurrent;
           const isActive = index === safeCurrent;
           const depth = Math.abs(offset);
-          const scale = isActive ? 1 : 1 - depth * 0.08;
-          const translate = offset * 120;
+          const scale = (isActive ? 1 : 1 - depth * 0.08) * baseScale;
+          const translate = offset * step;
           const blur = depth * 1.5;
           const opacity = Math.max(0, 1 - depth * 0.25);
 
@@ -211,7 +215,7 @@ export default function Slider({
         <div className="pointer-events-none absolute inset-0 rounded-[30px] border border-white/10" />
 
         <button
-          className="group absolute left-0 top-1/2 -translate-y-1/2 translate-x-[-50%] rounded-full border border-white/10 bg-black/60 p-3 text-white shadow-lg transition hover:bg-white/20 pointer-events-auto z-50"
+          className="group absolute left-4 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-black/60 p-3 text-white shadow-lg transition hover:bg-white/20 pointer-events-auto z-50"
           onClick={goPrev}
           aria-label="Previous slide"
         >
@@ -219,7 +223,7 @@ export default function Slider({
         </button>
 
         <button
-          className="group absolute right-0 top-1/2 -translate-y-1/2 translate-x-[50%] rounded-full border border-white/10 bg-black/60 p-3 text-white shadow-lg transition hover:bg-white/20 pointer-events-auto z-50"
+          className="group absolute right-4 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-black/60 p-3 text-white shadow-lg transition hover:bg-white/20 pointer-events-auto z-50"
           onClick={goNext}
           aria-label="Next slide"
         >
